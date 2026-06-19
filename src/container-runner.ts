@@ -434,6 +434,29 @@ async function buildContainerArgs(
 ): Promise<string[]> {
   const args: string[] = ['run', '--rm', '--name', containerName, '--label', CONTAINER_INSTALL_LABEL];
 
+  // Container hardening (threat-model baseline).
+  //
+  // Safe defaults — these do not interfere with the Node/Chromium agent
+  // workload, so they are always on:
+  //   - no-new-privileges: a process can never gain more privileges than its
+  //     parent via setuid/setgid binaries (defence-in-depth on top of USER node).
+  //   - pids-limit: caps fork-bombs / runaway process spawning inside the agent.
+  //
+  // Aggressive isolation — opt-in via NANOCLAW_HARDEN_CONTAINER=strict, because
+  // dropping all capabilities and a read-only rootfs can break tools that need
+  // specific caps or scratch space (e.g. Chromium's sandbox). The agent only
+  // writes under /workspace and /home/node (both mounted RW), so a read-only
+  // rootfs plus a tmpfs /tmp is compatible in principle and is the path we
+  // validate before promoting it to default.
+  args.push('--security-opt', 'no-new-privileges:true');
+  args.push('--pids-limit', process.env.NANOCLAW_PIDS_LIMIT ?? '512');
+  if (process.env.NANOCLAW_HARDEN_CONTAINER === 'strict') {
+    args.push('--cap-drop', 'ALL');
+    args.push('--read-only');
+    args.push('--tmpfs', '/tmp:rw,nosuid,nodev,size=512m');
+    log.info('Strict container hardening active', { containerName });
+  }
+
   // Environment — only vars read by code we don't own.
   // Everything NanoClaw-specific is in container.json (read by runner at startup).
   args.push('-e', `TZ=${TIMEZONE}`);
