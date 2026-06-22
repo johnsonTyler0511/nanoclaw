@@ -313,13 +313,52 @@ function setupSystemd(
     systemctlPrefix = 'systemctl --user';
   }
 
+  // On Linux user installs the daemon reaches Docker via the `docker` group,
+  // but a long-running `systemd --user` manager has a frozen supplementary
+  // group list, so a docker membership added during this same install isn't
+  // visible to it and the daemon hits "permission denied" on the docker
+  // socket. The temporary setfacl below papers over the current session, but
+  // it resets when dockerd or the VM restarts — breaking the service on the
+  // next boot. Launching under `sg docker` re-reads the group from /etc/group
+  // at every start, so it survives reboots. Only for the user-systemd Linux
+  // path with the user actually in the docker group.
+  const userInDockerGroup = (): boolean => {
+    try {
+      const u = execSync('whoami', { encoding: 'utf-8' }).trim();
+      const members =
+        execSync('getent group docker', { encoding: 'utf-8' })
+          .trim()
+          .split(':')
+          .pop() ?? '';
+      return members
+        .split(',')
+        .map((m) => m.trim())
+        .includes(u);
+    } catch {
+      return false;
+    }
+  };
+  let execStart = `${nodePath} ${projectRoot}/dist/index.js`;
+  if (
+    process.platform === 'linux' &&
+    !runningAsRoot &&
+    commandExists('sg') &&
+    userInDockerGroup()
+  ) {
+    const sgPath = execSync('command -v sg', { encoding: 'utf-8' }).trim();
+    execStart = `${sgPath} docker -c "${nodePath} ${projectRoot}/dist/index.js"`;
+    log.info('Launching daemon under `sg docker` for persistent Docker access', {
+      execStart,
+    });
+  }
+
   const unit = `[Unit]
 Description=NanoClaw Personal Assistant
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=${nodePath} ${projectRoot}/dist/index.js
+ExecStart=${execStart}
 WorkingDirectory=${projectRoot}
 Restart=always
 RestartSec=5
