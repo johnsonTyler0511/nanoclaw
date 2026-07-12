@@ -346,7 +346,9 @@ function setupSystemd(
     userInDockerGroup()
   ) {
     const sgPath = execSync('command -v sg', { encoding: 'utf-8' }).trim();
-    execStart = `${sgPath} docker -c "${nodePath} ${projectRoot}/dist/index.js"`;
+    // `exec` so node replaces the shell sg spawns — otherwise the tree is
+    // sg -> sh -> node and node is a grandchild of the tracked main process.
+    execStart = `${sgPath} docker -c "exec ${nodePath} ${projectRoot}/dist/index.js"`;
     log.info('Launching daemon under `sg docker` for persistent Docker access', {
       execStart,
     });
@@ -362,7 +364,7 @@ ExecStart=${execStart}
 WorkingDirectory=${projectRoot}
 Restart=always
 RestartSec=5
-KillMode=process
+KillMode=control-group
 Environment=HOME=${homeDir}
 Environment=PATH=/usr/local/bin:/usr/bin:/bin:${homeDir}/.local/bin
 StandardOutput=append:${projectRoot}/logs/nanoclaw.log
