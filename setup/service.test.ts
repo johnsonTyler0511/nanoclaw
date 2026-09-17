@@ -65,7 +65,7 @@ ExecStart=${nodePath} ${projectRoot}/dist/index.js
 WorkingDirectory=${projectRoot}
 Restart=always
 RestartSec=5
-KillMode=process
+KillMode=control-group
 Environment=HOME=${homeDir}
 Environment=PATH=/usr/local/bin:/usr/bin:/bin:${homeDir}/.local/bin
 StandardOutput=append:${projectRoot}/logs/nanoclaw.log
@@ -144,14 +144,14 @@ describe('systemd unit generation', () => {
     expect(unit).toContain('RestartSec=5');
   });
 
-  it('uses KillMode=process to preserve detached children', () => {
+  it('uses KillMode=control-group so the daemon is fully stopped, not orphaned', () => {
     const unit = generateSystemdUnit(
       '/usr/bin/node',
       '/home/user/nanoclaw',
       '/home/user',
       false,
     );
-    expect(unit).toContain('KillMode=process');
+    expect(unit).toContain('KillMode=control-group');
   });
 
   it('sets correct ExecStart', () => {
