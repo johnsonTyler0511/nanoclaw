@@ -346,8 +346,6 @@ function setupSystemd(
     userInDockerGroup()
   ) {
     const sgPath = execSync('command -v sg', { encoding: 'utf-8' }).trim();
-    // `exec` so node replaces the shell sg spawns — otherwise the tree is
-    // sg -> sh -> node and node is a grandchild of the tracked main process.
     execStart = `${sgPath} docker -c "exec ${nodePath} ${projectRoot}/dist/index.js"`;
     log.info('Launching daemon under `sg docker` for persistent Docker access', {
       execStart,
