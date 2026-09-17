@@ -145,11 +145,6 @@ describe('systemd unit generation', () => {
   });
 
   it('uses KillMode=control-group so the daemon is fully stopped, not orphaned', () => {
-    // The daemon may run under `sg docker -c "exec node ..."`, which makes node a
-    // child of the tracked main (sg) process. KillMode=process would signal only
-    // sg on stop, orphaning node — it keeps polling and spawns unhardened
-    // containers. control-group signals the whole cgroup. Agent containers are
-    // owned by dockerd (a different cgroup), so they are unaffected.
     const unit = generateSystemdUnit(
       '/usr/bin/node',
       '/home/user/nanoclaw',
